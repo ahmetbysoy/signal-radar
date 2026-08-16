@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useUiStore, useSettingsStore } from '../store/index'
 import { WsEngine } from './WsEngine'
+import { PwaManager } from './PwaManager'
 import { Header } from '../ui/components/Header'
 import { TabBar } from '../ui/components/TabBar'
 import { RadarScreen } from '../ui/screens/RadarScreen'
@@ -21,6 +22,7 @@ export function App() {
   return (
     <div className="phone-canvas">
       <WsEngine />
+      <PwaManager />
       <Header />
       <main className="screen-content">
         <AnimatePresence mode="wait">
