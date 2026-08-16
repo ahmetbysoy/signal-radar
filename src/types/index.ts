@@ -87,6 +87,30 @@ export interface SignalEvent {
     vel: number;
     composite: number;
   };
+  // Hit rate sonucu (değerlendirilmemişse undefined)
+  result?: SignalResult;
+}
+
+// ─── Hit Rate (Başarı Takibi) ────────────────────────────────────────────
+
+export type SignalOutcome = 'HIT' | 'MISS' | 'STOP';
+
+export interface SignalResult {
+  outcome: SignalOutcome;   // sonuç
+  closedAt: number;         // kapanış zamanı (ms)
+  closedPrice: number;      // kapanış fiyatı
+  maxGainPct: number;       // pozisyonda gördüğü max kazanç %
+  maxLossPct: number;       // pozisyonda gördüğü max kayıp %
+  pnlPct: number;           // kapanıştaki net kazanç %
+  timeframe: HitTimeframe;  // hangi zaman diliminde değerlendirildi
+}
+
+export type HitTimeframe = '5m' | '15m' | '1h';
+
+export interface HitRateConfig {
+  takeProfitPct: number;    // HIT eşiği: varsayılan +%0.8
+  stopLossPct: number;      // STOP eşiği: varsayılan -%0.5
+  evalWindowsMs: Record<HitTimeframe, number>;
 }
 
 // ─── Ayarlar ─────────────────────────────────────────────────────────────

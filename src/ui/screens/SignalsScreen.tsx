@@ -1,6 +1,68 @@
 import { useUiStore } from '../../store/index'
-import type { SignalEvent } from '../../types/index'
+import { computeSummary } from '../../core/hitrate/index'
+import type { SignalEvent, SignalOutcome } from '../../types/index'
 import './SignalsScreen.css'
+
+function formatPct(p: number): string {
+  const sign = p >= 0 ? '+' : ''
+  return `${sign}${(p * 100).toFixed(2)}%`
+}
+
+function outcomeBadge(outcome?: SignalOutcome) {
+  if (!outcome) {
+    return { label: '◌ AÇIK', cls: 'sc-outcome--open' }
+  }
+  if (outcome === 'HIT') return { label: '✓ HIT', cls: 'sc-outcome--hit' }
+  if (outcome === 'STOP') return { label: '✕ STOP', cls: 'sc-outcome--stop' }
+  return { label: '○ MISS', cls: 'sc-outcome--miss' }
+}
+
+function HitRateCard() {
+  const signalEvents = useUiStore((s) => s.signalEvents)
+  const s = computeSummary(signalEvents)
+
+  return (
+    <div className="hitrate-card">
+      <div className="hitrate-header">
+        <span className="hitrate-title">BAŞARI ORANI</span>
+        <span className="hitrate-total">{s.evaluated} değerlendirildi · {s.open} açık</span>
+      </div>
+      <div className="hitrate-row">
+        <div className="hitrate-stat">
+          <div className="hitrate-value hitrate-value--win">
+            {s.winRate > 0 ? `${Math.round(s.winRate * 100)}%` : '—'}
+          </div>
+          <div className="hitrate-label">Kazanma</div>
+        </div>
+        <div className="hitrate-stat">
+          <div className="hitrate-value hitrate-value--hit">{s.hits}</div>
+          <div className="hitrate-label">HIT</div>
+        </div>
+        <div className="hitrate-stat">
+          <div className="hitrate-value hitrate-value--stop">{s.stops}</div>
+          <div className="hitrate-label">STOP</div>
+        </div>
+        <div className="hitrate-stat">
+          <div className="hitrate-value hitrate-value--miss">{s.misses}</div>
+          <div className="hitrate-label">MISS</div>
+        </div>
+        <div className="hitrate-stat">
+          <div className={`hitrate-value ${s.totalPnlPct >= 0 ? 'hitrate-value--win' : 'hitrate-value--stop'}`}>
+            {formatPct(s.totalPnlPct)}
+          </div>
+          <div className="hitrate-label">Toplam</div>
+        </div>
+      </div>
+      {s.evaluated > 0 && (
+        <div className="hitrate-bar">
+          <div className="hitrate-bar__hit" style={{ width: `${(s.hits / s.evaluated) * 100}%` }} />
+          <div className="hitrate-bar__miss" style={{ width: `${(s.misses / s.evaluated) * 100}%` }} />
+          <div className="hitrate-bar__stop" style={{ width: `${(s.stops / s.evaluated) * 100}%` }} />
+        </div>
+      )}
+    </div>
+  )
+}
 
 function SignalCard({ event }: { event: SignalEvent }) {
   const ts = new Date(event.ts)
@@ -9,6 +71,7 @@ function SignalCard({ event }: { event: SignalEvent }) {
   })
   const dateStr = ts.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })
   const isBuy = event.side === 'BUY'
+  const badge = outcomeBadge(event.result?.outcome)
 
   return (
     <div className={`signal-card signal-card--${event.side.toLowerCase()}`}>
@@ -16,6 +79,7 @@ function SignalCard({ event }: { event: SignalEvent }) {
         <span className={`sc-badge sc-badge--${event.side.toLowerCase()}`}>
           {isBuy ? '▲ AL' : '▼ SAT'}
         </span>
+        <span className={`sc-outcome ${badge.cls}`}>{badge.label}</span>
         <span className="sc-time">
           {dateStr} {timeStr}
         </span>
@@ -35,6 +99,18 @@ function SignalCard({ event }: { event: SignalEvent }) {
         />
         <span className="sc-confidence-label">%{event.confidence} güven</span>
       </div>
+
+      {/* Sonuç (kapanmışsa) */}
+      {event.result && (
+        <div className={`sc-result sc-result--${event.result.outcome.toLowerCase()}`}>
+          <span className="sc-result-price">
+            Kapanış: {event.result.closedPrice.toLocaleString('en-US', { maximumFractionDigits: 1 })} ₮
+          </span>
+          <span className="sc-result-pnl">
+            {formatPct(event.result.pnlPct)} ({event.result.timeframe})
+          </span>
+        </div>
+      )}
 
       {/* Skor dökümü */}
       <div className="sc-scores">
@@ -63,6 +139,7 @@ export function SignalsScreen() {
 
   return (
     <div className="signals-screen">
+      <HitRateCard />
       <div className="signals-count">
         {reversed.length} sinyal (son 200)
       </div>

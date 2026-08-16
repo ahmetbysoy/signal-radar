@@ -152,3 +152,154 @@
   .signals-empty-icon { animation: none; }
   .sc-confidence-fill { transition: none; }
 }
+
+/* ─── Hit Rate Özeti ───────────────────────────────────────────── */
+
+.hitrate-card {
+  background: linear-gradient(135deg, rgba(52,211,153,.06), rgba(34,211,238,.04));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.hitrate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.hitrate-title {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--green);
+  letter-spacing: 0.1em;
+}
+
+.hitrate-total {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+.hitrate-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hitrate-stat {
+  text-align: center;
+}
+
+.hitrate-value {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.hitrate-value--win { color: var(--green); }
+.hitrate-value--stop { color: var(--red); }
+.hitrate-value--miss { color: var(--muted); }
+.hitrate-value--hit { color: var(--green); }
+
+.hitrate-label {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--muted);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hitrate-bar {
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--surface-2);
+  gap: 1px;
+}
+
+.hitrate-bar__hit {
+  background: var(--green);
+  transition: width 0.3s ease;
+}
+.hitrate-bar__miss {
+  background: var(--muted);
+}
+.hitrate-bar__stop {
+  background: var(--red);
+}
+
+/* ─── Outcome rozeti ───────────────────────────────────────────── */
+
+.sc-outcome {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+
+.sc-outcome--hit {
+  background: rgba(52,211,153,.15);
+  color: var(--green);
+  border: 1px solid rgba(52,211,153,.3);
+}
+.sc-outcome--stop {
+  background: rgba(248,113,113,.15);
+  color: var(--red);
+  border: 1px solid rgba(248,113,113,.3);
+}
+.sc-outcome--miss {
+  background: rgba(124,141,176,.1);
+  color: var(--muted);
+  border: 1px solid rgba(124,141,176,.2);
+}
+.sc-outcome--open {
+  background: rgba(34,211,238,.08);
+  color: var(--cyan);
+  border: 1px solid rgba(34,211,238,.2);
+  animation: pulse-open 2s ease-in-out infinite;
+}
+
+@keyframes pulse-open {
+  0%,100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* ─── Sonuç satırı ─────────────────────────────────────────────── */
+
+.sc-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.sc-result--hit {
+  background: rgba(52,211,153,.08);
+  border: 1px solid rgba(52,211,153,.2);
+  color: var(--green);
+}
+.sc-result--stop {
+  background: rgba(248,113,113,.08);
+  border: 1px solid rgba(248,113,113,.2);
+  color: var(--red);
+}
+.sc-result--miss {
+  background: rgba(124,141,176,.06);
+  border: 1px solid rgba(124,141,176,.15);
+  color: var(--muted);
+}
+
+.sc-result-pnl { font-weight: 700; }

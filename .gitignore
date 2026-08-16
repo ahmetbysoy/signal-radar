@@ -44,3 +44,4 @@ logs
 .vscode/*
 !.vscode/extensions.json
 .idea
+.vercel

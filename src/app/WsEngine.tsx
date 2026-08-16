@@ -8,10 +8,12 @@ import {
   loadSignalLog,
   saveSignalLog,
 } from '../core/signal/index'
+import { createHitRateState, trackSignal, evaluateTick, DEFAULT_HITRATE_CONFIG } from '../core/hitrate/index'
 import { useDataStore, useUiStore, useSettingsStore } from '../store/index'
-import type { NormalizedEvent } from '../types/index'
+import type { NormalizedEvent, SignalEvent } from '../types/index'
 import type { SignalEngineState } from '../core/signal/index'
 import type { TickState } from '../core/indicators/index'
+import type { HitRateState } from '../core/hitrate/index'
 
 /**
  * WsEngine: WSS bağlantısı + 10Hz tick döngüsünü yönetir.
@@ -23,6 +25,7 @@ export function WsEngine(): null {
   const buffersRef = useRef(createBuffers())
   const tickStateRef = useRef<TickState>(createTickState())
   const signalEngineRef = useRef<SignalEngineState>(createSignalEngineState())
+  const hitRateRef = useRef<HitRateState>(createHitRateState())
   const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const initializedRef = useRef(false)
   const lastSourceRef = useRef<string>('')
@@ -58,11 +61,19 @@ export function WsEngine(): null {
       const savedSignals = loadSignalLog()
       setSignalEvents(savedSignals)
       signalEventsRef.current = savedSignals
+      // Açık (result'ı olmayan) ve 1 saatten yeni sinyalleri takibe devam et
+      const now = Date.now()
+      for (const ev of savedSignals) {
+        if (!ev.result && now - ev.ts < 60 * 60 * 1000 && ev.price > 0) {
+          trackSignal(hitRateRef.current, ev)
+        }
+      }
     } else {
       // Kaynak değişti: buffer'ları ve durumu sıfırla
       buffersRef.current = createBuffers()
       tickStateRef.current = createTickState()
       signalEngineRef.current = createSignalEngineState()
+      hitRateRef.current = createHitRateState()
     }
 
     // Önceki manager/temizle
@@ -126,9 +137,32 @@ export function WsEngine(): null {
         const updated = [...signalEventsRef.current, firedEvent]
         signalEventsRef.current = updated
         saveSignalLog(updated)
+        // Hit rate takibine al
+        trackSignal(hitRateRef.current, firedEvent)
         // ses + titreşim
         playSignalSound(firedEvent.side, settings.soundEnabled)
         triggerVibration(firedEvent.side, settings.vibrationEnabled)
+      }
+
+      // ─── Hit rate değerlendirmesi ────────────────────────
+      if (currentPrice > 0) {
+        const closed = evaluateTick(hitRateRef.current, currentPrice, Date.now(), DEFAULT_HITRATE_CONFIG)
+        if (closed.length > 0) {
+          const list = [...signalEventsRef.current]
+          let changed = false
+          for (const closedEv of closed) {
+            const idx = list.findIndex((e) => e.id === closedEv.id)
+            if (idx >= 0) {
+              list[idx] = { ...list[idx], result: closedEv.result }
+              changed = true
+            }
+          }
+          if (changed) {
+            signalEventsRef.current = list
+            saveSignalLog(list)
+            setSignalEvents(list)
+          }
+        }
       }
     }, 100) // 10Hz
 
