@@ -148,12 +148,20 @@ export function processTick(
 // ─── Sinyal Günlüğü (localStorage persist) ───────────────────────────────
 
 const STORAGE_KEY = 'signal-radar:signals';
+const STORAGE_VERSION_KEY = 'signal-radar:version';
+const CURRENT_VERSION = 2; // Hit rate düzeltmesi sonrası eski veriyi temizlemek için
 const MAX_SIGNALS = 200;
 
 export function loadSignalLog(): SignalEvent[] {
   try {
-    // SSR/test koruması
     if (typeof localStorage === 'undefined') return [];
+    // Versiyon kontrolü — eski/uyumsuz veriyi sıfırla
+    const v = parseInt(localStorage.getItem(STORAGE_VERSION_KEY) || '0', 10);
+    if (v < CURRENT_VERSION) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION));
+      return [];
+    }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as SignalEvent[];
