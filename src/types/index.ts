@@ -65,7 +65,7 @@ export interface IndicatorValues {
   obiRaw: number;       // anlık OBI
   velocityZ: number;    // z-score
   velocityRaw: number;  // m/s (fiyat/s)
-  compositeSore: number; // ağırlıklı kompozit skor
+  compositeScore: number; // ağırlıklı kompozit skor
   confidence: number;   // 0–100
   ts: number;
 }

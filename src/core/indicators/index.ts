@@ -232,13 +232,13 @@ export function computeTick(
 
   // Kompozit skor (divergence dahil)
   const { weights } = settings;
-  const compositeSore =
+  const compositeScore =
     weights.cvd * cvd.cvdZ +
     weights.obi * obiResult.obi +
     weights.vel * velResult.velocityZ +
     cvd.divergenceAdjust;
 
-  const confidence = Math.min(100, Math.round((Math.abs(compositeSore) / 1.2) * 100));
+  const confidence = Math.min(100, Math.round((Math.abs(compositeScore) / 1.2) * 100));
 
   return {
     cvdNorm: cvd.cvdNorm,
@@ -248,7 +248,7 @@ export function computeTick(
     obiRaw: obiResult.obiRaw,
     velocityZ: velResult.velocityZ,
     velocityRaw: velResult.velocityRaw,
-    compositeSore,
+    compositeScore,
     confidence,
     ts: Date.now(),
   };

@@ -3,12 +3,16 @@ import {
   createChart,
   ColorType,
   CrosshairMode,
+  CandlestickSeries,
+  HistogramSeries,
+  createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
   type CandlestickData,
   type HistogramData,
   type Time,
   type SeriesMarker,
+  type ISeriesMarkersPluginApi,
 } from 'lightweight-charts'
 import { useDataStore, useUiStore } from '../../store/index'
 import type { Candle, SignalEvent } from '../../types/index'
@@ -31,6 +35,7 @@ export function ChartScreen() {
   const cvdChartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const cvdSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
 
   const candles = useDataStore((s) => s.candles)
   const liveCandle = useDataStore((s) => s.liveCandle)
@@ -54,10 +59,10 @@ export function ChartScreen() {
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#1E2A44' },
-      timeScale: { borderColor: '#1E2A44', timeVisible: true },
+      timeScale: { borderColor: '#1E2A44', timeVisible: true, secondsVisible: false },
       handleScroll: true,
       handleScale: true,
-    }
+    } as const
 
     // Ana mum grafiği
     const chart = createChart(container, {
@@ -67,7 +72,7 @@ export function ChartScreen() {
     })
     chartRef.current = chart
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#34D399',
       downColor: '#F87171',
       borderUpColor: '#34D399',
@@ -76,6 +81,7 @@ export function ChartScreen() {
       wickDownColor: '#F87171',
     })
     candleSeriesRef.current = candleSeries
+    markersPluginRef.current = createSeriesMarkers(candleSeries, [])
 
     // CVD histogram
     const cvdChart = createChart(cvdContainer, {
@@ -85,22 +91,35 @@ export function ChartScreen() {
     })
     cvdChartRef.current = cvdChart
 
-    const cvdSeries = cvdChart.addHistogramSeries({
-      color: '#34D399',
+    const cvdSeries = cvdChart.addSeries(HistogramSeries, {
       priceFormat: { type: 'price', precision: 4 },
     })
     cvdSeriesRef.current = cvdSeries
 
+    // Zaman ölçeklerini senkronize et
+    const syncTimeScale = (e: { visibleRange: unknown } | null) => {
+      if (!e) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const range = (cvdChart.timeScale() as any).getVisibleRange()
+      if (range) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(chart.timeScale() as any).setVisibleRange(range)
+      }
+    }
+    cvdChart.timeScale().subscribeVisibleTimeRangeChange(syncTimeScale as () => void)
+
     // Resize observer
     const ro = new ResizeObserver(() => {
-      chart.resize(container.clientWidth, container.clientHeight)
-      cvdChart.resize(cvdContainer.clientWidth, cvdContainer.clientHeight)
+      chart.applyOptions({ width: container.clientWidth, height: container.clientHeight || 240 })
+      cvdChart.applyOptions({ width: cvdContainer.clientWidth, height: cvdContainer.clientHeight || 100 })
     })
     ro.observe(container)
     ro.observe(cvdContainer)
 
     return () => {
       ro.disconnect()
+      markersPluginRef.current = null
+      cvdChart.timeScale().unsubscribeVisibleTimeRangeChange(syncTimeScale as () => void)
       chart.remove()
       cvdChart.remove()
     }
@@ -121,13 +140,13 @@ export function ChartScreen() {
     }
   }, [candles, liveCandle])
 
-  // CVD histogram güncelle (son 100 muma göre)
+  // CVD histogram güncelle (her mum için delta)
   useEffect(() => {
     const series = cvdSeriesRef.current
     if (!series || candles.length === 0) return
 
-    // Her mum için CVD delta hesapla (kapanış - açılış proxy)
-    const cvdData: HistogramData[] = candles.map((c) => {
+    const allCandles: Candle[] = liveCandle ? [...candles, liveCandle] : candles
+    const cvdData: HistogramData[] = allCandles.map((c) => {
       const delta = c.close - c.open
       return {
         time: c.time as Time,
@@ -141,7 +160,7 @@ export function ChartScreen() {
     } catch {
       // Duplicate time koruması
     }
-  }, [candles])
+  }, [candles, liveCandle])
 
   // Sinyal marker'ları güncelle
   useEffect(() => {
@@ -149,9 +168,9 @@ export function ChartScreen() {
     if (!series) return
 
     const markers: SeriesMarker<Time>[] = signalEvents
-      .filter((ev: SignalEvent) => candles.some((c) => Math.abs(c.time - ev.ts / 1000) < 15))
+      .filter((ev: SignalEvent) => candles.some((c) => Math.abs(c.time - ev.ts / 1000) < 30))
       .map((ev: SignalEvent) => ({
-        time: Math.floor(ev.ts / 1000 / 15) * 15 as Time,
+        time: (Math.floor(ev.ts / 1000 / 15) * 15) as Time,
         position: ev.side === 'BUY' ? 'belowBar' as const : 'aboveBar' as const,
         color: ev.side === 'BUY' ? '#34D399' : '#F87171',
         shape: ev.side === 'BUY' ? 'arrowUp' as const : 'arrowDown' as const,
@@ -159,7 +178,9 @@ export function ChartScreen() {
       }))
 
     try {
-      series.setMarkers(markers)
+      if (markersPluginRef.current) {
+        markersPluginRef.current.setMarkers(markers)
+      }
     } catch {
       // Marker hatası
     }

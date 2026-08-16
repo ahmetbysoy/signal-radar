@@ -105,8 +105,8 @@ export function RadarGauge() {
       scanAngleRef.current = (scanAngleRef.current + (TWO_PI * dt) / SCAN_DURATION) % TWO_PI
     }
     const scanAngle = scanAngleRef.current
-    const grad = ctx.createConicalGradient
-      ? (ctx as CanvasRenderingContext2D & { createConicalGradient?: (x: number, y: number, angle: number) => CanvasGradient }).createConicalGradient?.(cx, cy, scanAngle)
+    const grad = ctx.createConicGradient
+      ? ctx.createConicGradient(scanAngle, cx, cy)
       : null
 
     if (grad) {
@@ -142,7 +142,7 @@ export function RadarGauge() {
     }
 
     // ─── Kompozit skor oku ────────────────────────────────────────
-    const score = indicators?.compositeSore ?? 0
+    const score = indicators?.compositeScore ?? 0
     const confidence = indicators?.confidence ?? 0
     const clampedScore = Math.max(-1, Math.min(1, score))
     // -1 = sola (BUY güçlü sell?), +1 = sağa; ok -PI/2'den başlıyor

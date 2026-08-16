@@ -34,13 +34,13 @@ RSI, MACD, EMA gibi hazır indikatörler **YOK**. Bunun yerine ham piyasa verisi
 ## Hızlı başlangıç
 
 ```bash
-# Bağımlılıkları kur (peer dependency uyarıları yoksayılabilir)
-npm install --legacy-peer-deps
+# Bağımlılıkları kur
+npm install
 
 # Geliştirme sunucusu (http://localhost:5173)
 npm run dev
 
-# Test (Vitest)
+# Test (Vitest) — 26 birim testi
 npm test
 
 # Üretim build
@@ -50,12 +50,7 @@ npm run preview
 
 ### Fontlar
 
-Self-hosted fontlar için `public/fonts/` klasörüne ekleyin:
-- `SpaceGrotesk-SemiBold.woff2`
-- `JetBrainsMono-Medium.woff2`
-- `JetBrainsMono-Bold.woff2`
-
-Yoksa sistem fontları fallback olarak çalışır (system-ui, ui-monospace).
+Fontlar `public/fonts/` altında self-host olarak gelir (Space Grotesk 600, JetBrains Mono 500/700). CDN kullanmaz, çevrimdışı çalışır. Font dosyası eksik olursa sistem fontları (system-ui, ui-monospace) fallback olarak devreye girer.
 
 ### Canlı Veri
 

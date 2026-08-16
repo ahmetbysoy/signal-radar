@@ -4,11 +4,11 @@ import type {
   WsStatus,
   IndicatorValues,
   SignalEvent,
+  SignalState,
   Settings,
   Candle,
 } from '../types/index';
 import { DEFAULT_SETTINGS } from '../types/index';
-import type { SignalState } from '../core/signal/index';
 
 // ─── Data Store (≤10Hz tick verisi) ─────────────────────────────────────
 

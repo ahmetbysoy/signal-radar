@@ -7,17 +7,16 @@ import {
   std,
   zscore,
   emaStep,
-} from '../core/indicators/index'
-import type { NormalizedTrade, NormalizedDepth } from '../types/index'
+} from './index'
+import type { NormalizedTrade, NormalizedDepth, IndicatorValues } from '../../types/index'
 import {
   processTick,
   createSignalEngineState,
   appendSignal,
   loadSignalLog,
   saveSignalLog,
-} from '../core/signal/index'
-import type { IndicatorValues } from '../types/index'
-import { RingBuffer, CandleAggregator } from '../core/buffers/index'
+} from '../signal/index'
+import { RingBuffer, CandleAggregator } from '../buffers/index'
 
 // ─── Yardımcı ────────────────────────────────────────────────────────────
 
@@ -34,7 +33,7 @@ function makeIndicators(composite: number): IndicatorValues {
     obiRaw: 0,
     velocityZ: composite * 0.3,
     velocityRaw: 0,
-    compositeSore: composite,
+    compositeScore: composite,
     confidence: Math.min(100, Math.round(Math.abs(composite) / 1.2 * 100)),
     ts: Date.now(),
   }
