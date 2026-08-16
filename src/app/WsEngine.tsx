@@ -41,9 +41,22 @@ export function WsEngine(): null {
   const signalEventsRef = useRef<ReturnType<typeof useUiStore.getState>['signalEvents']>([])
 
   // Abonelik: mevcut sinyal listesini ref'te tut (persist için)
+  // ve her yeni sinyal geldiğinde hit rate takibine otomatik al
   useEffect(() => {
+    let prevLen = signalEventsRef.current.length
     return useUiStore.subscribe((state) => {
-      signalEventsRef.current = state.signalEvents
+      const events = state.signalEvents
+      // Yeni sinyal eklendiyse (uzunluk arttıysa)
+      if (events.length > prevLen) {
+        const newEvents = events.slice(prevLen)
+        for (const ev of newEvents) {
+          if (ev && ev.price > 0 && !ev.result) {
+            trackSignal(hitRateRef.current, ev)
+          }
+        }
+      }
+      signalEventsRef.current = events
+      prevLen = events.length
     })
   }, [])
 
@@ -61,10 +74,10 @@ export function WsEngine(): null {
       const savedSignals = loadSignalLog()
       setSignalEvents(savedSignals)
       signalEventsRef.current = savedSignals
-      // Açık (result'ı olmayan) ve 1 saatten yeni sinyalleri takibe devam et
+      // Açık (result'ı olmayan) ve 5 dakikadan yeni sinyalleri takibe devam et
       const now = Date.now()
       for (const ev of savedSignals) {
-        if (!ev.result && now - ev.ts < 60 * 60 * 1000 && ev.price > 0) {
+        if (!ev.result && now - ev.ts < 5 * 60 * 1000 && ev.price > 0) {
           trackSignal(hitRateRef.current, ev)
         }
       }

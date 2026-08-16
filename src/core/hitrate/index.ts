@@ -6,12 +6,13 @@ import type { SignalEvent, SignalResult, HitRateConfig, HitTimeframe, SignalOutc
  *
  * Kurallar:
  *   BUY sinyali:
- *     - Fiyat entryPrice * (1 + TP) üstüne çıkarsa → HIT
- *     - Fiyat entryPrice * (1 - SL) altına düşerse → STOP
- *     - Zaman penceresi sonunda hala aradaysa (ya da yukarıdaysa ama TP'ye ulaşmamışsa):
- *         · kapanış fiyatı entry'den yukarıda → HIT (zaman aşımı kârı)
- *         · aşağıda → MISS
+ *     - Fiyat entryPrice * (1 + TP) üstüne çıkarsa → HIT (anında kapat)
+ *     - Fiyat entryPrice * (1 - SL) altına düşerse → STOP (anında kapat)
+ *     - 5 dakika dolunca pozisyonu kapat: kârda ise HIT, zararda MISS
  *   SELL sinyali: tersi.
+ *
+ * Neden 5dk? Radar scalping odaklı; 15s mumlar ve 15sn cooldown ile çalışıyor.
+ * 1 saat bekletmek mantıksız.
  */
 
 const TIMEFRAME_MS: Record<HitTimeframe, number> = {
@@ -21,13 +22,12 @@ const TIMEFRAME_MS: Record<HitTimeframe, number> = {
 };
 
 export const DEFAULT_HITRATE_CONFIG: HitRateConfig = {
-  takeProfitPct: 0.008,   // %0.8
-  stopLossPct: 0.005,     // %0.5
+  takeProfitPct: 0.004,   // %0.4 — BTC'de ~250-300$'lık hareket
+  stopLossPct: 0.003,     // %0.3 — ~200$
   evalWindowsMs: TIMEFRAME_MS,
 };
 
 export interface HitRateState {
-  /** Değerlendirilmemiş (açık) sinyaller için gördüğü en iyi/kötü fiyat */
   trackers: Map<string, {
     signalId: string;
     side: 'BUY' | 'SELL';
@@ -36,6 +36,8 @@ export interface HitRateState {
     maxGainPct: number;
     maxLossPct: number;
     lastPrice: number;
+    bestPrice: number;    // görülen en iyi fiyat (max yönünde)
+    worstPrice: number;   // görülen en kötü fiyat (ters yönünde)
     resolved: boolean;
   }>;
 }
@@ -51,7 +53,9 @@ export function trackSignal(
   state: HitRateState,
   event: SignalEvent,
 ): void {
+  if (!event || !event.id || event.price <= 0) return;
   if (state.trackers.has(event.id)) return;
+  if (event.result) return; // zaten çözülmüşse takip etme
   state.trackers.set(event.id, {
     signalId: event.id,
     side: event.side,
@@ -60,15 +64,15 @@ export function trackSignal(
     maxGainPct: 0,
     maxLossPct: 0,
     lastPrice: event.price,
+    bestPrice: event.price,
+    worstPrice: event.price,
     resolved: false,
   });
 }
 
 /**
- * Her tick'te çağrılır: gelen fiyatla açık sinyalleri günceller ve
- * değerlendirmeye hazır olanları döner.
- *
- * @return Kapanan sinyaller (güncel result ile işaretlenmiş)
+ * Her tick'te çağrılır.
+ * @return Kapanan sinyaller (güncel result ile)
  */
 export function evaluateTick(
   state: HitRateState,
@@ -79,22 +83,37 @@ export function evaluateTick(
   if (currentPrice <= 0) return [];
 
   const closed: SignalEvent[] = [];
+  const winMs = config.evalWindowsMs['5m']; // ana değerlendirme penceresi 5dk
 
   for (const tracker of state.trackers.values()) {
     if (tracker.resolved) continue;
     tracker.lastPrice = currentPrice;
 
+    // En iyi/en kötü fiyat güncelle
+    if (tracker.side === 'BUY') {
+      tracker.bestPrice = Math.max(tracker.bestPrice, currentPrice);
+      tracker.worstPrice = Math.min(tracker.worstPrice, currentPrice);
+    } else {
+      tracker.bestPrice = Math.min(tracker.bestPrice, currentPrice);
+      tracker.worstPrice = Math.max(tracker.worstPrice, currentPrice);
+    }
+
     const entry = tracker.entryPrice;
     const movePct = tracker.side === 'BUY'
       ? (currentPrice - entry) / entry
       : (entry - currentPrice) / entry;
+    const bestMove = tracker.side === 'BUY'
+      ? (tracker.bestPrice - entry) / entry
+      : (entry - tracker.bestPrice) / entry;
+    const worstMove = tracker.side === 'BUY'
+      ? (tracker.worstPrice - entry) / entry
+      : (entry - tracker.worstPrice) / entry;
 
-    tracker.maxGainPct = Math.max(tracker.maxGainPct, movePct);
-    tracker.maxLossPct = Math.min(tracker.maxLossPct, movePct);
+    tracker.maxGainPct = bestMove;
+    tracker.maxLossPct = worstMove;
 
-    // TP veya STOP vurdu mu?
+    // ─── Anında TP/SL kontrolü ─────────────────────────
     if (movePct >= config.takeProfitPct) {
-      // En kısa zaman penceresinde hemen kapat
       closed.push(makeResult(tracker, currentPrice, 'HIT', '5m', now));
       tracker.resolved = true;
       continue;
@@ -105,22 +124,13 @@ export function evaluateTick(
       continue;
     }
 
-    // Zaman penceresi kontrolü:
+    // ─── Zaman penceresi: 5 dakika ─────────────────────
     const elapsed = now - tracker.createdAt;
-    let timeframe: HitTimeframe | null = null;
-    if (elapsed >= config.evalWindowsMs['1h']) timeframe = '1h';
-    else if (elapsed >= config.evalWindowsMs['15m']) timeframe = '15m';
-    else if (elapsed >= config.evalWindowsMs['5m']) {
-      // 5m dolduysa ama daha 15m/1h için takibe devam edeceğiz —
-      // burada sadece ara bir sonuca bakıyoruz: eğer hala açık ve 5m dolmuş
-      // ama TP/SL yememişse izlemeye devam. Zaman aşımında (1h) kapat.
-      continue;
-    }
-
-    if (timeframe === '1h') {
-      // 1 saat doldu, sonuca bağla: herhangi bir kâr HIT, kayıp MISS
-      const outcome: SignalOutcome = movePct > 0 ? 'HIT' : movePct < 0 ? 'MISS' : 'MISS';
-      closed.push(makeResult(tracker, currentPrice, outcome, '1h', now));
+    if (elapsed >= winMs) {
+      // 5 dakika doldu, sonuca bağla
+      // Pratik olarak: herhangi bir kâr HIT, sıfır veya kayıp MISS
+      const outcome: SignalOutcome = movePct > 0 ? 'HIT' : 'MISS';
+      closed.push(makeResult(tracker, currentPrice, outcome, '5m', now));
       tracker.resolved = true;
     }
   }
@@ -145,9 +155,6 @@ function makeResult(
     : (tracker.entryPrice - closedPrice) / tracker.entryPrice;
 
   return {
-    // Bu fonksiyon aslında var olan event'e result ekleyerek döner;
-    // fakat burada sadece result bilgisini üretmek için kullanıyoruz.
-    // WsEngine tarafında ilgili event bulunup result'ı set edilecek.
     id: tracker.signalId,
     ts: tracker.createdAt,
     side: tracker.side,
@@ -167,18 +174,17 @@ function makeResult(
 }
 
 /**
- * Hit rate özeti: verilen sinyal listesinden
- * HIT/MISS/STOP sayılarını ve win rate'i hesaplar.
+ * Hit rate özeti
  */
 export interface HitRateSummary {
   total: number;
-  evaluated: number;   // result'ı olan
+  evaluated: number;
   hits: number;
   misses: number;
   stops: number;
-  open: number;       // henüz değerlendirilmemiş
-  winRate: number;    // hits / evaluated
-  avgPnlPct: number;  // değerlendirilmiş sinyallerin ortalama kârı
+  open: number;
+  winRate: number;
+  avgPnlPct: number;
   totalPnlPct: number;
 }
 
@@ -206,5 +212,4 @@ export function computeSummary(events: SignalEvent[]): HitRateSummary {
   };
 }
 
-// STORAGE key — sinyallerle birlikte tutulur, ayrı key gerekmez
 export const STORAGE_KEY = 'signal-radar:signals';
